@@ -20,7 +20,7 @@ return new class extends Migration
             $table->date('issue_date')->nullable();
             $table->date('due_date')->nullable();
             $table->timestamps();
-
+            $table->softDeletes();
             $table->index('company_id', 'invoices_company_id_index');
             $table->index('client_id', 'invoices_client_id_index');
         });
