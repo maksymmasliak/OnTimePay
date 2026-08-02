@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateInvoiceRequest;
 use App\Models\Invoice;
 use App\Services\InvoiceService;
 use Illuminate\Http\JsonResponse;
+use App\Jobs\SendInvoiceJob;
 
 final class InvoiceController extends Controller
 {
@@ -41,5 +42,17 @@ final class InvoiceController extends Controller
         $this->invoiceService->delete($invoice);
 
         return response()->json(null, 204);
+    }
+    public function send(Invoice $invoice): JsonResponse
+    {
+        $this->authorize('update', $invoice);
+
+        if ($invoice->status !== 'draft') {
+            abort(422, 'Only draft invoices can be sent.');
+        }
+
+        SendInvoiceJob::dispatch($invoice);
+
+        return response()->json(['message' => 'Invoice queued for sending.']);
     }
 }
