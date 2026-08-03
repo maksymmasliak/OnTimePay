@@ -10,6 +10,10 @@ class Payment extends Model
     use BelongsToCompany;
 
     protected $fillable = [
-        'stripe_payment_intent_id'
+        'client_id',
+        'invoice_id',
+        'amount',
+        'stripe_payment_intent_id',
+        'status',
     ];
 }

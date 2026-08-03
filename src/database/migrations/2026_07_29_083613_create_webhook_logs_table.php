@@ -14,8 +14,10 @@ return new class extends Migration
         Schema::create('webhook_logs', function (Blueprint $table) {
             $table->id();
             $table->string('stripe_event_id')->unique();
+            $table->string('type')->nullable();
             $table->jsonb('payload');
-            $table->string('status')->default('processed');
+            $table->string('status')->default('pending');
+            $table->text('error_message')->nullable();
             $table->timestamps();
         });
     }
