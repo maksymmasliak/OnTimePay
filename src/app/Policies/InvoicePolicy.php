@@ -32,4 +32,10 @@ class InvoicePolicy
         return $user->company_id === $invoice->company_id
             && $invoice->status === 'draft';
     }
+
+    public function viewLedger(User $user, Invoice $invoice): bool
+    {
+        return $user->company_id === $invoice->company_id
+            && $user->role === 'owner';
+    }
 }

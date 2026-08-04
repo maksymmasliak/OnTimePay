@@ -12,6 +12,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('invoices', InvoiceController::class)
         ->except(['index', 'show', 'create', 'edit']);
     Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send']);
+    Route::get('invoices/{invoice}/ledger', [InvoiceController::class, 'ledger']);
     Route::post('invoices/{invoice}/checkout', [StripeCheckoutController::class, 'store']);
 });
 

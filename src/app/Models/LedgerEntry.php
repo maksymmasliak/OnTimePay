@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Concerns\BelongsToCompany;
+use App\Enums\LedgerEntryType;
 
 class LedgerEntry extends Model
 {
@@ -16,4 +17,11 @@ class LedgerEntry extends Model
         'amount',
         'type',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'type' => LedgerEntryType::class,
+        ];
+    }
 }

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Stripe\Webhook;
 use Stripe\Exception\SignatureVerificationException;
+use App\Enums\LedgerEntryType;
 
 class StripeWebhookController extends Controller
 {
@@ -81,7 +82,7 @@ class StripeWebhookController extends Controller
                 $ledgerEntry = new LedgerEntry([
                     'invoice_id' => $invoice->id,
                     'amount' => $session->amount_total / 100,
-                    'type' => 'payment',
+                    'type'  => LedgerEntryType::Payment,
                 ]);
                 $ledgerEntry->company_id = $invoice->company_id;
                 $ledgerEntry->save();
