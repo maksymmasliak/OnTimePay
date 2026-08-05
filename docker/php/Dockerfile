@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libjpeg62-turbo-dev \
     libzip-dev \
     pkg-config \
+    cron \
     $PHPIZE_DEPS \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -24,6 +25,9 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 RUN pecl install redis && docker-php-ext-enable redis
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+COPY crontab /etc/cron.d/scheduler
+RUN chmod 0644 /etc/cron.d/scheduler
 
 WORKDIR /var/www/html
 

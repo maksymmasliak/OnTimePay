@@ -26,6 +26,21 @@ services:
       redis:
         condition: service_started
 
+  scheduler:
+    build:
+      context: ./docker/php
+    restart: unless-stopped
+    command: cron -f
+    user: root
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
   nginx:
     image: nginx:stable-alpine
     restart: unless-stopped
