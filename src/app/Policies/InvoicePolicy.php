@@ -24,7 +24,8 @@ class InvoicePolicy
 
     public function update(User $user, Invoice $invoice): bool
     {
-        return $user->company_id === $invoice->company_id;
+        return $user->company_id === $invoice->company_id
+            && $invoice->status === 'draft';
     }
 
     public function delete(User $user, Invoice $invoice): bool

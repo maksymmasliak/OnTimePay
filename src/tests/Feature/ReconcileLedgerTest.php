@@ -49,6 +49,6 @@ class ReconcileLedgerTest extends TestCase
 
         $this->artisan('app:reconcile-ledger')
             ->expectsOutputToContain('found 1 mismatch(es)')
-            ->assertExitCode(0);
+            ->assertExitCode(1);
     }
 }

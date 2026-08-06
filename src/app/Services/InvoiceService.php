@@ -13,8 +13,9 @@ final class InvoiceService
     public function create(InvoiceData $data, User $user): Invoice
     {
         return DB::transaction(function () use ($data, $user) {
+            // company_id is intentionally not passed here: it's excluded from
+            // $fillable and is auto-set from Auth::user() by BelongsToCompany::creating().
             $invoice = Invoice::create([
-                'company_id' => $user->company_id,
                 'client_id' => $data->clientId,
                 'due_date' => $data->dueDate,
                 'status' => 'draft',

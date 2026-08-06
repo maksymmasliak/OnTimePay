@@ -41,4 +41,26 @@ class AuthControllerTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    public function test_login_is_throttled_after_too_many_attempts(): void
+    {
+        $company = Company::factory()->create();
+        $user = User::factory()->for($company)->create([
+            'password' => Hash::make('secret123'),
+        ]);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/login', [
+                'email' => $user->email,
+                'password' => 'wrong-password',
+            ])->assertStatus(422);
+        }
+
+        $response = $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'wrong-password',
+        ]);
+
+        $response->assertStatus(429);
+    }
 }

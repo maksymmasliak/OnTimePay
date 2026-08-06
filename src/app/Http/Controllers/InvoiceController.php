@@ -19,6 +19,20 @@ final class InvoiceController extends Controller
         $this->authorizeResource(Invoice::class, 'invoice');
     }
 
+    public function index(): JsonResponse
+    {
+        $invoices = Invoice::with('client')
+            ->latest()
+            ->paginate(15);
+
+        return response()->json($invoices);
+    }
+
+    public function show(Invoice $invoice): JsonResponse
+    {
+        return response()->json($invoice->load('items', 'client'));
+    }
+
     public function store(StoreInvoiceRequest $request): JsonResponse
     {
         $data = InvoiceData::fromArray($request->validated());
@@ -41,7 +55,7 @@ final class InvoiceController extends Controller
 
     public function send(Invoice $invoice): JsonResponse
     {
-        $this->authorize('update', $invoice);
+        $this->authorize('view', $invoice);
 
         if ($invoice->status !== 'draft') {
             abort(422, 'Only draft invoices can be sent.');

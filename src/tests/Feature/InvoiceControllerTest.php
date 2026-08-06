@@ -144,4 +144,31 @@ class InvoiceControllerTest extends TestCase
 
         $response->assertStatus(403);
     }
+    public function test_user_cannot_update_sent_invoice(): void
+    {
+        $company = Company::factory()->create();
+        $user = User::factory()->for($company)->create();
+        $invoice = Invoice::factory()->for($company)->create(['status' => 'sent']);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->patchJson("/api/invoices/{$invoice->id}", [
+                'due_date' => now()->addDays(10)->toDateString(),
+            ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_user_cannot_update_paid_invoice(): void
+    {
+        $company = Company::factory()->create();
+        $user = User::factory()->for($company)->create();
+        $invoice = Invoice::factory()->for($company)->create(['status' => 'paid']);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->patchJson("/api/invoices/{$invoice->id}", [
+                'due_date' => now()->addDays(10)->toDateString(),
+            ]);
+
+        $response->assertStatus(403);
+    }
 }

@@ -13,7 +13,7 @@ class ReconcileLedger extends Command
 
     protected $description = 'Check that paid invoices balance matches their ledger entries sum';
 
-    public function handle(): void
+    public function handle(): int
     {
         $invoices = Invoice::withoutGlobalScope(CompanyScope::class)
             ->where('status', 'paid')
@@ -41,5 +41,7 @@ class ReconcileLedger extends Command
         }
 
         $this->info("Checked {$invoices->count()} paid invoices, found {$mismatches} mismatch(es).");
+
+        return $mismatches > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

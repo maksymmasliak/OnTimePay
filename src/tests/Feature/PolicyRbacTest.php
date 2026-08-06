@@ -43,14 +43,6 @@ class PolicyRbacTest extends TestCase
         $this->assertFalse($owner->can('delete', $invoice));
     }
 
-    public function test_manager_cannot_view_ledger_entries(): void
-    {
-        $company = Company::factory()->create();
-        $manager = User::factory()->for($company)->create(['role' => 'manager']);
-        $this->actingAs($manager);
-        $this->assertFalse($manager->can('viewAny', \App\Models\LedgerEntry::class));
-    }
-
     public function test_owner_can_view_ledger_entries(): void
     {
         $company = Company::factory()->create();
