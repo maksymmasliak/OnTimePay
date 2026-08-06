@@ -8,6 +8,11 @@ use Illuminate\Http\JsonResponse;
 
 class StripeCheckoutController extends Controller
 {
+    public function __construct(
+        private readonly StripeClient $stripe,
+    ) {
+    }
+
     public function store(Invoice $invoice): JsonResponse
     {
         $this->authorize('view', $invoice);
@@ -16,9 +21,7 @@ class StripeCheckoutController extends Controller
             abort(422, 'Invoice is not payable in its current status.');
         }
 
-        $stripe = new StripeClient(config('services.stripe.secret'));
-
-        $session = $stripe->checkout->sessions->create([
+        $session = $this->stripe->checkout->sessions->create([
             'mode' => 'payment',
             'line_items' => [[
                 'price_data' => [
