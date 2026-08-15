@@ -36,6 +36,11 @@ class InvoicePolicy
 
     public function viewLedger(User $user, Invoice $invoice): bool
     {
+        // Deliberately narrower than checkout creation (StripeCheckoutController::store(),
+        // authorized against 'view'): any company member can request payment
+        // for an invoice, but only an owner can see the company's aggregated
+        // financial balance. See StripeCheckoutController::store() for the
+        // other side of this decision.
         return $user->company_id === $invoice->company_id
             && $user->role === 'owner';
     }

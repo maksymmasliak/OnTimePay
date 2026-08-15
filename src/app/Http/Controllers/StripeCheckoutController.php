@@ -15,6 +15,13 @@ class StripeCheckoutController extends Controller
 
     public function store(Invoice $invoice): JsonResponse
     {
+        // Deliberately checked against 'view', not restricted to owner: any
+        // company member (owner or manager) can create a payment link for an
+        // invoice they can already see. This is intentionally narrower than
+        // InvoicePolicy::viewLedger() (owner-only) — initiating a collection
+        // attempt is treated as a lower-sensitivity action than seeing the
+        // company's aggregated financial balance. See InvoicePolicy::viewLedger()
+        // for the other side of this decision.
         $this->authorize('view', $invoice);
 
         if (!in_array($invoice->status, ['sent', 'overdue','collections'])) {
