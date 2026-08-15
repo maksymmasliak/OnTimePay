@@ -87,7 +87,7 @@ class UserControllerTest extends TestCase
         ]);
 
         $tempPassword = $createResponse->json('temporary_password');
-        
+
         \Illuminate\Support\Facades\Auth::shouldUse('web');
 
         $loginResponse = $this->postJson('/api/login', [
@@ -264,5 +264,54 @@ class UserControllerTest extends TestCase
         $response = $this->actingAs($manager, 'sanctum')->deleteJson("/api/users/{$colleague->id}");
 
         $response->assertStatus(403);
+    }
+    public function test_user_can_change_own_password(): void
+    {
+        $company = Company::factory()->create();
+        $manager = User::factory()->for($company)->create();
+
+        $response = $this->actingAs($manager, 'sanctum')->patchJson("/api/users/{$manager->id}", [
+            'password' => 'newpassword123',
+            'password_confirmation' => 'newpassword123',
+        ]);
+
+        $response->assertOk();
+    }
+
+    public function test_new_password_actually_logs_in(): void
+    {
+        $company = Company::factory()->create();
+        $manager = User::factory()->for($company)->create();
+
+        $this->actingAs($manager, 'sanctum')->patchJson("/api/users/{$manager->id}", [
+            'password' => 'newpassword123',
+            'password_confirmation' => 'newpassword123',
+        ])->assertOk();
+
+        // actingAs(..., 'sanctum') leaks the default auth guard to 'sanctum' for
+        // the rest of the test — AuthController::login() calls Auth::attempt()
+        // on the default guard, which RequestGuard (Sanctum) doesn't support.
+        // Reset to 'web' to reproduce a real, unauthenticated /login request.
+        \Illuminate\Support\Facades\Auth::shouldUse('web');
+
+        $response = $this->postJson('/api/login', [
+            'email' => $manager->email,
+            'password' => 'newpassword123',
+        ]);
+
+        $response->assertOk()->assertJsonStructure(['token']);
+    }
+
+    public function test_password_change_requires_confirmation(): void
+    {
+        $company = Company::factory()->create();
+        $manager = User::factory()->for($company)->create();
+
+        $response = $this->actingAs($manager, 'sanctum')->patchJson("/api/users/{$manager->id}", [
+            'password' => 'newpassword123',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors('password');
     }
 }
