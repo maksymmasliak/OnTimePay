@@ -1,4 +1,23 @@
 services:
+  composer:
+    build:
+      context: ./docker/php
+    command: ["composer", "install", "--no-interaction", "--prefer-dist"]
+    volumes:
+      - ./src:/var/www/html
+
+  migrate:
+    build:
+      context: ./docker/php
+    command: ["php", "artisan", "migrate", "--force"]
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      composer:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
   app:
     build:
       context: ./docker/php
@@ -6,6 +25,10 @@ services:
     volumes:
       - ./src:/var/www/html
     depends_on:
+      composer:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -19,6 +42,10 @@ services:
     volumes:
       - ./src:/var/www/html
     depends_on:
+      composer:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
       app:
         condition: service_started
       postgres:
@@ -35,12 +62,17 @@ services:
     volumes:
       - ./src:/var/www/html
     depends_on:
+      composer:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
       app:
         condition: service_started
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+
   nginx:
     image: nginx:stable-alpine
     restart: unless-stopped
