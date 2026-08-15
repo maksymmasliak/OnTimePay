@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -31,9 +32,37 @@ class InvoiceControllerTest extends TestCase
         $response->assertCreated();
 
         $invoice = Invoice::first();
-        $this->assertEquals(1100, $invoice->total_amount);
+        $this->assertSame('1100.00', $invoice->total_amount);
         $this->assertCount(2, $invoice->items);
         $this->assertEquals($company->id, $invoice->company_id);
+    }
+
+    public function test_money_fields_are_cast_to_decimal_strings(): void
+    {
+        // Locks in the decimal:2 cast added to Invoice/InvoiceItem/Payment: money
+        // fields must come back as fixed-precision strings ("1100.00"), never as
+        // float, so nothing downstream silently loses precision on read.
+        $company = Company::factory()->create();
+        $user = User::factory()->for($company)->create();
+        $client = Client::factory()->for($company)->create();
+
+        $this->actingAs($user, 'sanctum')->postJson('/api/invoices', [
+            'client_id' => $client->id,
+            'due_date' => now()->addDays(14)->toDateString(),
+            'items' => [
+                ['description' => 'Консультація', 'quantity' => 3, 'unit_price' => 33.33],
+            ],
+        ])->assertCreated();
+
+        $invoice = Invoice::with('items')->first();
+        $item = $invoice->items->first();
+
+        $this->assertIsString($invoice->total_amount);
+        $this->assertSame('99.99', $invoice->total_amount);
+        $this->assertIsString($item->quantity);
+        $this->assertSame('3.00', $item->quantity);
+        $this->assertIsString($item->unit_price);
+        $this->assertSame('33.33', $item->unit_price);
     }
 
     public function test_creating_invoice_with_client_from_another_company_fails_validation(): void
@@ -101,7 +130,7 @@ class InvoiceControllerTest extends TestCase
             ]);
 
         $response->assertOk();
-        $this->assertEquals(150, $invoice->fresh()->total_amount);
+        $this->assertSame('150.00', $invoice->fresh()->total_amount);
         $this->assertCount(1, $invoice->fresh()->items);
     }
 
@@ -144,6 +173,7 @@ class InvoiceControllerTest extends TestCase
 
         $response->assertStatus(403);
     }
+
     public function test_user_cannot_update_sent_invoice(): void
     {
         $company = Company::factory()->create();

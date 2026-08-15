@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\WebhookPermanentException;
 use App\Models\WebhookLog;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -38,7 +39,6 @@ class StripeWebhookController extends Controller
                 ]
             );
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-            // race condition: інший процес щойно вставив цей самий event_id паралельно
             $log = WebhookLog::where('stripe_event_id', $event->id)->firstOrFail();
         }
 
@@ -58,7 +58,7 @@ class StripeWebhookController extends Controller
                 $companyId = $session->metadata->company_id ?? null;
 
                 if (!$invoiceId || !$companyId) {
-                    throw new \RuntimeException('Missing invoice_id or company_id in metadata');
+                    throw new WebhookPermanentException('Missing invoice_id or company_id in metadata');
                 }
 
                 $invoice = Invoice::withoutGlobalScope(CompanyScope::class)
@@ -66,7 +66,13 @@ class StripeWebhookController extends Controller
                     ->findOrFail($invoiceId);
 
                 if ($invoice->company_id !== (int) $companyId) {
-                    throw new \RuntimeException('Invoice company mismatch — possible tampering.');
+                    throw new WebhookPermanentException('Invoice company mismatch — possible tampering.');
+                }
+
+                if ($invoice->status === 'paid') {
+                    $log->update(['status' => 'processed', 'error_message' => 'Duplicate payment attempt ignored — invoice already paid.']);
+                    Log::warning('Stripe webhook: duplicate payment attempt ignored', ['event_id' => $event->id, 'invoice_id' => $invoice->id]);
+                    return;
                 }
 
                 $payment = new Payment([
@@ -91,9 +97,19 @@ class StripeWebhookController extends Controller
 
                 $log->update(['status' => 'processed']);
             });
+        } catch (WebhookPermanentException $e) {
+            // Permanent/business-logic failure (bad metadata, tampering, missing
+            // invoice). Retrying won't fix it — acknowledge with 200 so Stripe
+            // stops redelivering, but keep the failure visible for manual review.
+            $log->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
+            Log::error('Stripe webhook rejected (permanent error)', ['event_id' => $event->id, 'error' => $e->getMessage()]);
+
+            return response()->json(['status' => 'error', 'error' => $e->getMessage()], 200);
         } catch (\Throwable $e) {
             $log->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
-            Log::error('Stripe webhook processing failed', ['event_id' => $event->id, 'error' => $e->getMessage()]);
+            Log::error('Stripe webhook processing failed (will retry)', ['event_id' => $event->id, 'error' => $e->getMessage()]);
+
+            return response()->json(['status' => 'error'], 500);
         }
 
         return response()->json(['status' => 'ok'], 200);

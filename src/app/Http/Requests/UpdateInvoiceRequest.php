@@ -23,7 +23,7 @@ class UpdateInvoiceRequest extends FormRequest
                     $query->where('company_id', $this->user()->company_id);
                 }),
             ],
-            'due_date' => ['sometimes', 'required', 'date'],
+            'due_date' => ['sometimes', 'required', 'date', 'after_or_equal:today'],
 
             'items' => ['sometimes', 'required', 'array', 'min:1'],
             'items.*.description' => ['required_with:items', 'string', 'max:255'],

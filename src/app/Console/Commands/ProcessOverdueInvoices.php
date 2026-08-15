@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\Scopes\CompanyScope;
 use App\Jobs\SendReminderJob;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class ProcessOverdueInvoices extends Command
 {
@@ -17,40 +18,61 @@ class ProcessOverdueInvoices extends Command
 
     public function handle(): void
     {
-        $invoices = Invoice::withoutGlobalScope(CompanyScope::class)
+        $invoiceIds = Invoice::withoutGlobalScope(CompanyScope::class)
             ->whereIn('status', ['sent', 'overdue'])
             ->where('due_date', '<', now())
-            ->get();
+            ->pluck('id');
 
-        foreach ($invoices as $invoice) {
-            $daysOverdue = $invoice->due_date->diffInDays(now());
+        foreach ($invoiceIds as $invoiceId) {
+            DB::transaction(function () use ($invoiceId) {
+                $invoice = Invoice::withoutGlobalScope(CompanyScope::class)
+                    ->lockForUpdate()
+                    ->find($invoiceId);
 
-            if ($invoice->status === 'sent') {
-                $invoice->update(['status' => 'overdue']);
-                $this->logAndNotify($invoice, DunningReminderType::Overdue);
-            }
+                if (!$invoice || !in_array($invoice->status, ['sent', 'overdue'], true)) {
+                    return;
+                }
 
-            if ($daysOverdue >= 3) {
-                $this->logAndNotify($invoice, DunningReminderType::Reminder1);
-            }
+                $daysOverdue = $invoice->due_date->diffInDays(now());
 
-            if ($daysOverdue >= 7) {
-                $this->logAndNotify($invoice, DunningReminderType::Reminder2);
-                $invoice->update(['status' => 'collections']);
-            }
+                if ($invoice->status === 'sent') {
+                    $invoice->update(['status' => 'overdue']);
+                    $this->logAndNotify($invoice, DunningReminderType::Overdue);
+
+                    return;
+                }
+
+                $reminder1Sent = $this->alreadySent($invoice, DunningReminderType::Reminder1);
+
+                if (!$reminder1Sent && $daysOverdue >= 3) {
+                    $this->logAndNotify($invoice, DunningReminderType::Reminder1);
+
+                    return;
+                }
+
+                $reminder2Sent = $this->alreadySent($invoice, DunningReminderType::Reminder2);
+
+                if ($reminder1Sent && !$reminder2Sent && $daysOverdue >= 7) {
+                    $this->logAndNotify($invoice, DunningReminderType::Reminder2);
+                    $invoice->update(['status' => 'collections']);
+                }
+            });
         }
 
-        $this->info("Processed {$invoices->count()} overdue invoice(s).");
+        $this->info("Processed {$invoiceIds->count()} overdue invoice(s).");
+    }
+
+    private function alreadySent(Invoice $invoice, DunningReminderType $type): bool
+    {
+        return DunningLog::withoutGlobalScope(CompanyScope::class)
+            ->where('invoice_id', $invoice->id)
+            ->where('reminder_type', $type)
+            ->exists();
     }
 
     private function logAndNotify(Invoice $invoice, DunningReminderType $type): void
     {
-        $alreadySent = DunningLog::withoutGlobalScope(CompanyScope::class)
-            ->where('invoice_id', $invoice->id)
-            ->where('reminder_type', $type)
-            ->exists();
-
-        if ($alreadySent) {
+        if ($this->alreadySent($invoice, $type)) {
             return;
         }
 

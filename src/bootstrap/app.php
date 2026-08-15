@@ -20,8 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Час нижче — приклад для демонстрації, як розводити задачі за навантаженням.
         // У реальному продакшені час підбирається під вікно низького навантаження
         // на БД/чергу конкретного оточення — див. README, розділ "Scheduled Jobs".
-        $schedule->command('app:process-overdue-invoices')->dailyAt('01:00');
-        $schedule->command('app:reconcile-ledger')->dailyAt('02:00');
+        $schedule->command('app:process-overdue-invoices')->dailyAt('01:00')->withoutOverlapping();
+        $schedule->command('app:reconcile-ledger')->dailyAt('02:00')->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

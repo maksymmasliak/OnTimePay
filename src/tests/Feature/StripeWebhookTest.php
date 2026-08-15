@@ -24,9 +24,6 @@ class StripeWebhookTest extends TestCase
         config(['services.stripe.webhook_secret' => $this->webhookSecret]);
     }
 
-    /**
-     * Будує підписаний Stripe-подібний webhook payload.
-     */
     private function buildSignedPayload(array $eventData): array
     {
         $payload = json_encode($eventData);
@@ -191,5 +188,96 @@ class StripeWebhookTest extends TestCase
             'status' => 'processed',
         ]);
         $this->assertEquals(1, Payment::withoutGlobalScope(CompanyScope::class)->count());
+    }
+
+    public function test_second_concurrent_checkout_session_does_not_double_pay(): void
+    {
+        $company = Company::factory()->create();
+        $client = Client::factory()->for($company)->create();
+        $invoice = Invoice::factory()->for($company)->create([
+            'client_id' => $client->id,
+            'status' => 'sent',
+            'total_amount' => 100.00,
+        ]);
+
+        $firstEvent = $this->checkoutCompletedEvent('evt_test_dup_session_1', $invoice, 'pi_test_first');
+        [$firstPayload, $firstSignature] = $this->buildSignedPayload($firstEvent);
+
+        $secondEvent = $this->checkoutCompletedEvent('evt_test_dup_session_2', $invoice, 'pi_test_second');
+        [$secondPayload, $secondSignature] = $this->buildSignedPayload($secondEvent);
+
+        $this->call('POST', '/api/webhooks/stripe', [], [], [],
+            ['HTTP_STRIPE-SIGNATURE' => $firstSignature, 'CONTENT_TYPE' => 'application/json'], $firstPayload)
+            ->assertOk();
+
+        $this->call('POST', '/api/webhooks/stripe', [], [], [],
+            ['HTTP_STRIPE-SIGNATURE' => $secondSignature, 'CONTENT_TYPE' => 'application/json'], $secondPayload)
+            ->assertOk();
+
+        $this->assertEquals(1, Payment::withoutGlobalScope(CompanyScope::class)->count());
+        $this->assertEquals(1, LedgerEntry::withoutGlobalScope(CompanyScope::class)->count());
+        $this->assertEquals('paid', $invoice->fresh()->status);
+
+        $this->assertDatabaseHas('webhook_logs', [
+            'stripe_event_id' => 'evt_test_dup_session_2',
+            'status' => 'processed',
+        ]);
+    }
+
+    public function test_tampered_metadata_acknowledges_with_200_and_does_not_trigger_retry(): void
+    {
+        $company = Company::factory()->create();
+        $otherCompany = Company::factory()->create();
+        $client = Client::factory()->for($company)->create();
+        $invoice = Invoice::factory()->for($company)->create([
+            'client_id' => $client->id,
+            'status' => 'sent',
+            'total_amount' => 100.00,
+        ]);
+
+        $event = $this->checkoutCompletedEvent('evt_test_tampered', $invoice);
+        $event['data']['object']['metadata']['company_id'] = (string) $otherCompany->id;
+        [$payload, $signature] = $this->buildSignedPayload($event);
+
+        $response = $this->call('POST', '/api/webhooks/stripe', [], [], [],
+            ['HTTP_STRIPE-SIGNATURE' => $signature, 'CONTENT_TYPE' => 'application/json'], $payload);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('webhook_logs', [
+            'stripe_event_id' => 'evt_test_tampered',
+            'status' => 'failed',
+        ]);
+        $this->assertEquals(0, Payment::withoutGlobalScope(CompanyScope::class)->count());
+        $this->assertEquals('sent', $invoice->fresh()->status);
+    }
+
+    public function test_nonexistent_invoice_returns_500_to_trigger_stripe_retry(): void
+    {
+        $company = Company::factory()->create();
+        $client = Client::factory()->for($company)->create();
+        $invoice = Invoice::factory()->for($company)->create([
+            'client_id' => $client->id,
+            'status' => 'sent',
+            'total_amount' => 100.00,
+        ]);
+
+        $nonExistentInvoiceId = $invoice->id + 999999;
+
+        $event = $this->checkoutCompletedEvent('evt_test_missing_invoice', $invoice);
+        $event['data']['object']['metadata']['invoice_id'] = (string) $nonExistentInvoiceId;
+        [$payload, $signature] = $this->buildSignedPayload($event);
+
+        $response = $this->call('POST', '/api/webhooks/stripe', [], [], [],
+            ['HTTP_STRIPE-SIGNATURE' => $signature, 'CONTENT_TYPE' => 'application/json'], $payload);
+
+        $response->assertStatus(500);
+
+        $this->assertDatabaseHas('webhook_logs', [
+            'stripe_event_id' => 'evt_test_missing_invoice',
+            'status' => 'failed',
+        ]);
+        $this->assertEquals(0, Payment::withoutGlobalScope(CompanyScope::class)->count());
+        $this->assertEquals('sent', $invoice->fresh()->status);
     }
 }

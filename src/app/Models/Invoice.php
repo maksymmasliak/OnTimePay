@@ -26,6 +26,7 @@ class Invoice extends Model
         return [
             'due_date' => 'date',
             'issue_date' => 'date',
+            'total_amount' => 'decimal:2',
         ];
     }
 
@@ -43,7 +44,8 @@ class Invoice extends Model
     {
         return $this->hasMany(InvoiceItem::class);
     }
-    public function ledgerEntries():HasMany
+
+    public function ledgerEntries(): HasMany
     {
         return $this->hasMany(LedgerEntry::class);
     }

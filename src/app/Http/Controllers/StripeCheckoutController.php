@@ -17,7 +17,7 @@ class StripeCheckoutController extends Controller
     {
         $this->authorize('view', $invoice);
 
-        if (!in_array($invoice->status, ['sent', 'overdue'])) {
+        if (!in_array($invoice->status, ['sent', 'overdue','collections'])) {
             abort(422, 'Invoice is not payable in its current status.');
         }
 

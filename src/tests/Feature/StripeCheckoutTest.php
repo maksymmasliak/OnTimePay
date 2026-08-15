@@ -48,6 +48,37 @@ class StripeCheckoutTest extends TestCase
         $response->assertOk();
         $response->assertJson(['checkout_url' => 'https://checkout.stripe.com/fake-session']);
     }
+    public function test_owner_can_create_checkout_session_for_collections_invoice(): void
+    {
+        $company = Company::factory()->create();
+        $user = User::factory()->for($company)->create();
+        $client = Client::factory()->for($company)->create();
+        $invoice = Invoice::factory()->for($company)->create([
+            'client_id' => $client->id,
+            'status' => 'collections',
+            'total_amount' => 100.00,
+        ]);
+
+        $fakeSession = Session::constructFrom(['url' => 'https://checkout.stripe.com/fake-session']);
+
+        $sessionService = $this->mock(SessionService::class, function ($mock) use ($fakeSession) {
+            $mock->shouldReceive('create')->once()->andReturn($fakeSession);
+        });
+
+        $checkoutService = $this->mock(CheckoutService::class, function ($mock) use ($sessionService) {
+            $mock->sessions = $sessionService;
+        });
+
+        $stripeClient = $this->mock(StripeClient::class, function ($mock) use ($checkoutService) {
+            $mock->checkout = $checkoutService;
+        });
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson("/api/invoices/{$invoice->id}/checkout");
+
+        $response->assertOk();
+        $response->assertJson(['checkout_url' => 'https://checkout.stripe.com/fake-session']);
+    }
 
     public function test_cannot_checkout_draft_invoice(): void
     {

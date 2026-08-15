@@ -16,4 +16,11 @@ class Payment extends Model
         'stripe_payment_intent_id',
         'status',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'amount' => 'decimal:2',
+        ];
+    }
 }
