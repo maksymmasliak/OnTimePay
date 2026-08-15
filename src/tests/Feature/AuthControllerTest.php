@@ -83,4 +83,113 @@ class AuthControllerTest extends TestCase
 
         $response->assertStatus(401);
     }
+
+    public function test_user_can_register_new_company_and_becomes_owner(): void
+    {
+        $response = $this->postJson('/api/register', [
+            'company_name' => 'Test Company LLC',
+            'name' => 'Maksym Owner',
+            'email' => 'owner@testcompany.test',
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+        ]);
+
+        $response->assertCreated()->assertJsonStructure(['token']);
+
+        $this->assertDatabaseHas('companies', ['name' => 'Test Company LLC']);
+
+        $user = User::where('email', 'owner@testcompany.test')->first();
+        $this->assertNotNull($user);
+        $this->assertEquals('owner', $user->role);
+        $this->assertEquals('Test Company LLC', $user->company->name);
+    }
+
+    public function test_registration_token_grants_immediate_access(): void
+    {
+        $response = $this->postJson('/api/register', [
+            'company_name' => 'Immediate Access Co',
+            'name' => 'Owner Name',
+            'email' => 'immediate@testcompany.test',
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+        ]);
+
+        $token = $response->json('token');
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/invoices')
+            ->assertOk();
+    }
+
+    public function test_registration_fails_with_duplicate_email(): void
+    {
+        $company = Company::factory()->create();
+        $existingUser = User::factory()->for($company)->create();
+
+        $response = $this->postJson('/api/register', [
+            'company_name' => 'Another Company',
+            'name' => 'Someone Else',
+            'email' => $existingUser->email,
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+        ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('email');
+        $this->assertDatabaseCount('companies', 1);
+    }
+
+    public function test_registration_fails_when_passwords_do_not_match(): void
+    {
+        $response = $this->postJson('/api/register', [
+            'company_name' => 'Mismatch Co',
+            'name' => 'Test User',
+            'email' => 'mismatch@testcompany.test',
+            'password' => 'secret123',
+            'password_confirmation' => 'different-password',
+        ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('password');
+        $this->assertDatabaseMissing('users', ['email' => 'mismatch@testcompany.test']);
+        $this->assertDatabaseCount('companies', 0);
+    }
+
+    public function test_registration_ignores_role_from_request_body(): void
+    {
+        $response = $this->postJson('/api/register', [
+            'company_name' => 'Sneaky Co',
+            'name' => 'Sneaky User',
+            'email' => 'sneaky@testcompany.test',
+            'password' => 'secret123',
+            'password_confirmation' => 'secret123',
+            'role' => 'manager',
+        ]);
+
+        $response->assertCreated();
+
+        $user = User::where('email', 'sneaky@testcompany.test')->first();
+        $this->assertEquals('owner', $user->role);
+    }
+
+    public function test_registration_is_throttled_after_too_many_attempts(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/register', [
+                'company_name' => "Throttle Co {$i}",
+                'name' => 'Test User',
+                'email' => "duplicate@testcompany.test",
+                'password' => 'short',
+                'password_confirmation' => 'mismatch',
+            ])->assertStatus(422);
+        }
+
+        $response = $this->postJson('/api/register', [
+            'company_name' => 'Throttle Co Final',
+            'name' => 'Test User',
+            'email' => 'duplicate@testcompany.test',
+            'password' => 'short',
+            'password_confirmation' => 'mismatch',
+        ]);
+
+        $response->assertStatus(429);
+    }
 }
