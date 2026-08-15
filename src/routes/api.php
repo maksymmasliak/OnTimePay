@@ -5,6 +5,7 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\StripeCheckoutController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
@@ -17,6 +18,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('invoices/{invoice}/ledger', [InvoiceController::class, 'ledger']);
     Route::post('invoices/{invoice}/checkout', [StripeCheckoutController::class, 'store']);
     Route::apiResource('clients', ClientController::class);
+    Route::apiResource('users', UserController::class);
 });
 
 Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle']);

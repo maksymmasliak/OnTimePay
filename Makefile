@@ -18,3 +18,6 @@ fresh:
 
 logs:
 	docker compose logs -f
+
+seed:
+	docker compose exec app php artisan db:seed
