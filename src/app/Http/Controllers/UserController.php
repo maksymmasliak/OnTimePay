@@ -6,6 +6,7 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -76,8 +77,15 @@ final class UserController extends Controller
                 ]);
             }
         }
+        if (array_key_exists('password', $data) && $user->id === auth()->id()) {
+            if (!Hash::check($data['current_password'] ?? '', $user->password)) {
+                throw ValidationException::withMessages([
+                    'current_password' => ['The provided password does not match your current password.'],
+                ]);
+            }
+        }
 
-        $user->fill(collect($data)->except('role')->toArray());
+        $user->fill(collect($data)->except(['role', 'current_password'])->toArray());
 
         if (array_key_exists('role', $data)) {
             $user->role = $data['role'];

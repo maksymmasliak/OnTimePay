@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -14,6 +15,11 @@ class UpdateUserRequest extends FormRequest
 
     public function rules(): array
     {
+        $isChangingOwnPassword = $this->filled('password')
+            && $this->user()
+            && $this->route('user') instanceof User
+            && $this->user()->id === $this->route('user')->id;
+
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => [
@@ -22,6 +28,7 @@ class UpdateUserRequest extends FormRequest
             ],
             'role' => ['sometimes', Rule::in(['owner', 'manager'])],
             'password' => ['sometimes', 'required', 'string', 'min:8', 'confirmed'],
+            'current_password' => [Rule::requiredIf($isChangingOwnPassword), 'string'],
         ];
     }
 }
